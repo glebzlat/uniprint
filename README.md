@@ -5,8 +5,8 @@ templates and fold expressions.
 
 As you know, the Python's print function has the following signature:
 `print(arguments, sep=" ", end="\n", file=sys.out, flush=False)`, where 
-the last four parameters are unnecessary, has a default values, and they
-are named parameters, i.e you need to pass it by name: `sep=" "`. They
+the last four parameters are unnecessary, has default values, and they
+are "named parameters", i.e you need to pass it by name: `sep=" "`. They
 called the keyword parameters.
 
 And, as you know, C++ in general does not allow to do such things. However,
