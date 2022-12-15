@@ -1,3 +1,3 @@
 # uniprint
 
-The experiment implementation of python's keyword arguments in C++.
+The experiment implementation of python keyword arguments in C++.
