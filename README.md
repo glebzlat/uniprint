@@ -31,16 +31,16 @@ return its value, otherwise return default value.
 
 	template <typename... Args>
 	const char* get_sep(const char* default_value, Args const&... args) {
-		const char* result = default_value;
-		(get_sep_impl(&result, args), ...);
-		return result;
+	    const char* result = default_value;
+	    (get_sep_impl(&result, args), ...);
+	    return result;
 	}
 
 There are two overloads of get_sep_impl. First overload takes a separator
 and assigns its value to a target, second overload does nothing.
 
 	void get_sep_impl(const char** target, separator const& sep) {
-		*target = &sep.get_value();
+	    *target = &sep.get_value();
 	}
 
 	template <typename T>
