@@ -40,7 +40,7 @@ uniprint::print print(std::cout);
 using namespace uniprint::args;
 
 print("Hello", "world", sep{"_"}, end{"!"});
-print(" No newline")
+print(" No newline");
 ```
 
 And it will produce the same result as the example of Python's print function.
