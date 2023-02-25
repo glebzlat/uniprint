@@ -1,49 +1,33 @@
 # uniprint
 
-The experimental implementation of Python keyword arguments in C++ using 
-templates and fold expressions.
+Print functor with keyword arguments, that imitates Python's print function.
+Written in C++ 11.
 
-As you know, the Python's print function has the following signature:
-`print(arguments, sep=" ", end="\n", file=sys.out, flush=False)`, where 
-the last four parameters are unnecessary, has default values, and they
-are "named parameters", i.e you need to pass it by name: `sep=" "`. They
-called the keyword parameters.
+As you know, in Python you can write
 
-And, as you know, C++ in general does not allow to do such things. However,
-you can do this, using fold expressions.
+```python
+print("Hello", "world")
+```
 
-So, I show you, how can you implement this. First, we need to determine,
-what is expected. In the code, I wanted to get the value of a separator,
-if the separator is passed to a function, and a default separator value,
-if not.
+and `print` function will add spaces and newline symbol for you, so the output
+will be `Hello world`. Also, you can override the default function options.
+For example, print underscores instead spaces and an exclamation instead a
+newline:
 
-	const char* default_sep = " ";
-	sep = get_sep(default_sep, args...);
+```python
+print("Hello", "world", sep='_', end='!')
+print(" No newline")
+```
 
-In the code above, the first argument is a default value, and the second 
-is a template parameter pack. It is a good idea to take a pack by reference.
+The result will be `Hello_World! No newline`.
 
-	template <typename... Args>
-	const char* get_sep(const char* default_value, Args const&... args);
+This feature is called the
+[keyword arguments](https://docs.python.org/3/glossary.html#term-argument).
+There are also two arguments of a [python's print
+function](https://docs.python.org/3/library/functions.html#print): `file`,
+that specifies a specific output stream to write and `flush`, that tells to a
+function to flush the stream's buffer after each write.
 
-Now we need to expand parameter pack, and, if there is the separator, 
-return its value, otherwise return default value. 
-
-	template <typename... Args>
-	const char* get_sep(const char* default_value, Args const&... args) {
-	    const char* result = default_value;
-	    (get_sep_impl(&result, args), ...);
-	    return result;
-	}
-
-There are two overloads of get_sep_impl. First overload takes a separator
-and assigns its value to a target, second overload does nothing.
-
-	void get_sep_impl(const char** target, separator const& sep) {
-	    *target = &sep.get_value();
-	}
-
-	template <typename T>
-	void get_sep_impl(const char**, T const&) {}
-
-Well, that's all.
+It looks naturally in Python, which is a lite dynamic language without a
+strict typing. But in C++? Is it possible? I tell you: Yes, it is possible.
+And I can do it using black magic of template metaprogramming.

@@ -1,189 +1,223 @@
-/*
- * Copyright (c) 2022 edKotinsky
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE. 
- */
-
 #ifndef UNIPRINT_HPP
 #define UNIPRINT_HPP
 
-#include "typepack.hpp"
-
-#include <type_traits>
+#include "gfp.hpp"
+#include <cstddef>
+#include <cstdio>
 #include <ostream>
+#include <type_traits>
+#include <utility>
 
 namespace uniprint {
 
-  namespace param {
-
-    struct param_base {};
-
-    template <class T>
-      struct print_param_base : param_base {
-        print_param_base(T val) : value(val) {}
-        ~print_param_base() = default;
-
-        inline T get_value() const { return value; }
-
-        protected:
-        T value;
-      };
-
-    struct print_separator : print_param_base <const char*> {
-      print_separator(const char* string) : print_param_base(string) {}
-    };
-
-    struct print_endline : print_param_base <const char*> {
-      print_endline(const char* string) : print_param_base(string) {}
-    };
-
-    struct print_flush : param_base {};
-
-    struct print_file : print_param_base <std::ostream&> {
-      print_file(std::ostream& os) : print_param_base(os) {}
-    };
-
-  }
-
-  namespace impl {
-
-    inline void get_sep_impl([[maybe_unused]] const char** target, 
-        param::print_separator const& ps) {
-      *target = ps.get_value();
-    }
-
-    template <typename T> void get_sep_impl(const char**, T&) {}
-
-    template <typename... Args>
-      inline const char* get_sep(const char* def, Args const&... args) {
-        static_assert(
-            tp::count<param::print_separator>(tp::type_pack<Args...>{}) <= 1,
-            "Function expects only one parameter of this type");
-        const char* result = def;
-        (get_sep_impl(&result, args), ...);
-        return result;
-      }
-
-    inline void get_endl_impl([[maybe_unused]] const char** target,
-        param::print_endline const& pe) {
-      *target = pe.get_value();
-    }
-
-    template <typename T> void get_endl_impl(const char**, T const&) {}
-
-    template <typename... Args>
-      inline const char* get_endl(const char* def, Args const&... args) {
-        static_assert(
-            tp::count<param::print_endline>(tp::type_pack<Args...>{}) <= 1,
-            "Function expects only one parameter of this type");
-        const char* result = def;
-        (get_endl_impl(&result, args), ...);
-        return result;
-      }
-
-    template <typename... Args>
-      constexpr bool get_flush() {
-        static_assert(
-            tp::count<param::print_flush>(tp::type_pack<Args...>{}) <= 1,
-            "Function expects only one parameter of this type");
-        using argpack = tp::type_pack<Args...>;
-        return tp::contains<param::print_flush>(argpack{});
-      }
-
-    inline void get_file_impl([[maybe_unused]] std::ostream** target, 
-        param::print_file const& pf) {
-      *target = &pf.get_value();
-    }
-
-    template <typename T> void get_file_impl(std::ostream**, T const&) {}
-
-    template <typename... Args>
-      inline std::ostream& get_file(std::ostream& def, Args const&... args) {
-        static_assert(
-            tp::count<param::print_file>(tp::type_pack<Args...>{}) <= 1,
-            "Function expects only one parameter of this type");
-        std::ostream* result = &def;
-        (get_file_impl(&result, args), ...);
-        return *result;
-      }
+  namespace args {
 
     template <typename T>
-      struct not_param {
-        static constexpr bool value = 
-          !std::is_base_of_v<param::param_base, T>;
-      };
+    class argument {
+    protected:
+      T m_value;
+    public:
+      explicit argument(T value) : m_value(value) {}
 
-  }
+      argument() = delete;
 
-  namespace options {
+      T get() {
+        return m_value;
+      }
 
-    using sep = param::print_separator;
-    using end = param::print_endline;
-    using flush = param::print_flush;
-    using file = param::print_file;
+      T const get() const {
+        return m_value;
+      }
 
-  }
+      operator T() {
+        return m_value;
+      }
 
-  template <std::ostream& Os>
-    struct printer {
-      private:
-
-        static constexpr std::ostream& def_os = Os;
-
-        static constexpr const char* def_sep = " ";
-        static constexpr const char* def_endl = "\n";
-
-        size_t last_index;
-        size_t curr_index;
-
-        template <bool DoFlush, typename T>
-          inline void print_impl(T const& val, 
-              [[maybe_unused]] const char* sep, std::ostream& os) {
-            if constexpr (!std::is_base_of_v<param::param_base, T>) {
-              os << val << (curr_index++ == last_index ? "" : sep);
-              if constexpr (DoFlush) os << std::flush;
-            }
-          }
-
-      public:
-
-        template <typename... Args>
-          inline void operator() (Args&&... args) {
-            [[maybe_unused]]
-              const char* sep = impl::get_sep(def_sep, args...);
-            const char* end = impl::get_endl(def_endl, args...);
-            std::ostream& os = impl::get_file(def_os, args...);
-            constexpr const bool flush = impl::get_flush<Args...>();
-
-            using argpack = tp::type_pack<Args...>;
-            using tp_no_params = 
-              decltype(tp::filter<impl::not_param>(argpack{}));
-
-            last_index = tp_no_params::size - 1;
-            curr_index = 0;
-
-            (print_impl<flush>(args, sep, os), ..., 
-             print_impl<flush>("", end, os));
-          }
-
+      operator const T() const {
+        return m_value;
+      }
     };
 
-}
+    class dummy_base {};
+
+    class sep : public argument<char const*>,
+                dummy_base {
+    public:
+      using type = char const*;
+
+      explicit sep(type value) : argument<type>(value) {}
+    };
+
+    class end : public argument<char const*>,
+                dummy_base {
+    public:
+      using type = char const*;
+
+      explicit end(type value) : argument<type>(value) {}
+    };
+
+    class file : public argument<std::ostream&>,
+                 dummy_base {
+    public:
+      using type = std::ostream&;
+
+      explicit file(type stream) : argument<type>(stream) {}
+    };
+
+    class flush : public argument<bool>,
+                  dummy_base {
+    public:
+      using type = bool;
+
+      explicit flush(type value) : argument<type>(value) {}
+    };
+
+  } // namespace args
+
+  namespace details {
+
+    using namespace gfp::details;
+
+    template <typename T, bool Cond, T IfTrue, T IfFalse>
+    struct conditional {
+      using type = T;
+      static constexpr T value = IfTrue;
+    };
+
+    template <typename T, T IfTrue, T IfFalse>
+    struct conditional<T, false, IfTrue, IfFalse> {
+      using type = T;
+      static constexpr T value = IfFalse;
+    };
+  } // namespace details
+
+  class print {
+  private:
+    struct m_print_args {
+      // little trick: store pointer to `std::ostream`, not reference. See
+      // `std::reference_wrapper`
+      std::ostream* file = nullptr;
+      char const* sep = " ";
+      char const* end = "\n";
+      bool flush = false;
+
+      explicit m_print_args(std::ostream* f) : file(f) {}
+
+      m_print_args() = default;
+    };
+
+    m_print_args m_args;
+
+    // inductive case 1: print separator on each even index
+    template <std::size_t Index, typename Head, typename... Rest>
+    auto print_impl(m_print_args& args, Head&& head, Rest&&... rest) ->
+        typename std::enable_if<Index % 2 == 0>::type {
+      // if it is not a last type in a pack or it is not an argument class
+      if (sizeof...(Rest) != 0 ||
+          !std::is_base_of<args::dummy_base,
+                           typename std::decay<Head>::type>::value)
+        (*args.file) << args.sep;
+      print_impl<Index + 1>(args, std::forward<Head>(head),
+                            std::forward<Rest>(rest)...);
+    }
+
+    // SFINAE type-based if condition:
+    // if T is not an argument class, print the value
+    template <typename T>
+    auto check_print(m_print_args& args, T&& value) -> typename std::enable_if<
+        !std::is_base_of<args::dummy_base, typename std::decay<T>::type>::value,
+        void>::type {
+      (*args.file) << value;
+    }
+
+    // otherwise do nothing
+    template <typename T>
+    auto check_print(m_print_args&, T&&) ->
+        typename std::enable_if<std::is_base_of<
+            args::dummy_base, typename std::decay<T>::type>::value>::type {}
+
+    // inductive case 2: on odd index, print head and recursively
+    // print the rest
+    template <std::size_t Index, typename Head, typename... Rest>
+    auto print_impl(m_print_args& args, Head&& head, Rest&&... rest) ->
+        typename std::enable_if<Index % 2 != 0, void>::type {
+      check_print(args, std::forward<Head>(head));
+      if (args.flush) (*args.file) << std::flush;
+
+      // check if the Head type is an argument type
+      // if so, next index will be equal to Index, otherwise Index + 1
+      using head_t = typename std::decay<Head>::type;
+      constexpr bool is_base_arg =
+          std::is_base_of<args::dummy_base, head_t>::value;
+      constexpr std::size_t next_idx =
+          details::conditional<std::size_t, is_base_arg, Index,
+                               Index + 1>::value;
+
+      print_impl<next_idx>(args, std::forward<Rest>(rest)...);
+    }
+
+    // base case: no values. Just print the end symbol
+    template <std::size_t Index>
+    void print_impl(m_print_args& args) {
+      (*args.file) << args.end;
+      if (args.flush) (*args.file) << std::flush;
+    }
+
+  public:
+    explicit print(std::ostream& default_file) : m_args(&default_file) {}
+
+    print() = delete;
+
+    print(print&) = delete;
+
+    print& operator=(print&) = delete;
+
+    template <typename... Types>
+    void operator()(Types&&... args) {
+      m_print_args print_args(m_args);
+
+      auto flush =
+          gfp::get_from_pack<args::flush> {}(std::forward<Types>(args)...);
+
+      gfp::call_match(
+          flush,
+          [&print_args](args::flush a) {
+            print_args.flush = a.get();
+          },
+          [](gfp::none_type) {});
+
+      auto sep = gfp::get_from_pack<args::sep> {}(std::forward<Types>(args)...);
+
+      gfp::call_match(
+          sep,
+          [&print_args](args::sep a) {
+            print_args.sep = a.get();
+          },
+          [](gfp::none_type) {});
+
+      auto end = gfp::get_from_pack<args::end> {}(std::forward<Types>(args)...);
+
+      gfp::call_match(
+          end,
+          [&print_args](args::end a) {
+            print_args.end = a.get();
+          },
+          [](gfp::none_type) {});
+
+      auto file =
+          gfp::get_from_pack<args::file> {}(std::forward<Types>(args)...);
+
+      gfp::call_match(
+          file,
+          [&print_args](args::file a) {
+            print_args.file = &a.get();
+          },
+          [](gfp::none_type) {});
+
+      print_impl<1>(print_args, std::forward<Types>(args)...);
+    }
+  };
+
+} // namespace uniprint
 
 #endif
