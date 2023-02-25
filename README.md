@@ -57,6 +57,14 @@ If an argument with the specific type appeared in the list of template arguments
 gfp will return its value. Also gfp does not ommit references and cv-qualifiers,
 so if the argument is an lvalue, gfp will return the reference.
 
+```cpp
+const int value = 10;
+
+using t = decltype(gfp::get_from_pack<int>{}('a', "hello", value));
+
+assert((std::is_same<const int&, t>::value));
+```
+
 In case if argument is not appeared, gfp will return an object of
 `gfp::none_type`. Gfp provides a way to easily handle this case:
 `gfp::call_match` template function, that takes a value and an arbitrary number
