@@ -10,9 +10,12 @@ namespace gfp {
 
   namespace details {
 
+    // helper struct
+    // recursively iterates through the list of types
     template <typename Desired, typename AlwaysVoid, typename... Types>
     struct find_type {};
 
+    // if the current type is the desired, so the result type is current type
     template <typename Desired, typename Head, typename... Tail>
     struct find_type<
         Desired,
@@ -23,11 +26,14 @@ namespace gfp {
       using type = Head;
     };
 
+    // if there are no types in a list, the result is none_type
     template <typename Desired>
     struct find_type<Desired, void> {
       using type = none_type;
     };
 
+    // inductive case: Head type is not the Desired type, and there are
+    // types after current, so throw away Head and recursively find
     template <typename Desired, typename Head, typename... Tail>
     struct find_type<
         Desired,
@@ -46,16 +52,20 @@ namespace gfp {
     template <typename... Types>
     using find_type_t = typename details::find_type<T, void, Types...>::type;
 
+    // Base case: the desired type found
     template <typename Head, typename... Rest>
     auto extract(Head&& head, Rest&&...) -> typename std::enable_if<
         std::is_same<T, typename std::decay<Head>::type>::value, Head>::type {
       return head;
     }
 
+    // Base case: the desired type not appeared in the pack
     none_type extract() {
       return {};
     }
 
+    // Inductive case: Current type is not a desired type and there are
+    // some types after it
     template <typename Head, typename... Rest>
     auto extract(Head&&, Rest&&... rest) -> typename std::enable_if<
         !std::is_same<T, typename std::decay<Head>::type>::value,
