@@ -1,94 +1,81 @@
-# uniprint
+# Uniprint
 
-Print functor with keyword arguments, that imitates Python's print function.
-Written in C++ 11.
+C++ Python-like print function with keyword arguments. Main idea of this thing
+is the keyword arguments implementation in pure C++11.
 
-As you know, in Python you can write
+To make things short, I'll give some code examples of Python's `print` function
+and compare it with Uniprint.
 
-```python
-print("Hello", "world")
-```
-
-and `print` function will add spaces and newline symbol for you, so the output
-will be `Hello world`. Also, you can override the default function options.
-For example, print underscores instead spaces and an exclamation instead a
-newline:
+Python:
 
 ```python
-print("Hello", "world", sep='_', end='!')
-print(" No newline")
+>>> print("Hello", "world", sep=', ', end='!\n')
+Hello, world!
+>>> print(1, 2, 3, sep='\n')
+1
+2
+3
+>>> from sys import stderr
+>>> print("Message", file=stderr)
+
 ```
 
-The result will be `Hello_World! No newline`.
-
-This feature is called the
-[keyword arguments](https://docs.python.org/3/glossary.html#term-argument).
-There are also two arguments of a [python's print
-function](https://docs.python.org/3/library/functions.html#print): `file`,
-that specifies a specific output stream to write and `flush`, that tells to a
-function to flush the stream's buffer after each write.
-
-It looks naturally in Python, which is a lite dynamic language without a
-strict typing. But in C++? Is it possible? I tell you: Yes, it is possible.
-And I can do it using black magic of template metaprogramming.
-
-With the uniprint, that means the Universal Printer, you can write the
-following code:
+C++ Uniprint:
 
 ```cpp
 uniprint::print print(std::cout);
 using namespace uniprint::args;
 
-print("Hello", "world", sep{"_"}, end{"!"});
-print(" No newline");
+print("Hello", "world", sep{", "}, end{"!\n"});
+print(1, 2, 3, sep{"\n"});
+print(file{std::cerr}, "Message"); // yep, kwarg before positional
 ```
 
-And it will produce the same result as the example of Python's print function.
-See more in examples directory.
+So, does it look similar?
 
-## Additional
+As I said earlier, the main idea of Uniprint is
+[keyword arguments](https://docs.python.org/3/glossary.html#term-argument)
+implementation in C++.
 
-There are two header files in include directory: `uniprint.hpp`, which is a
-main header of a project, and `gfp.hpp`. "GFP" means Get From Pack. It is a
-utility, that allows to extract an argument of the specific type from
-the template parameter pack.
+Uniprint also has `flush` and `file` arguments as the original `print` function.
 
-If an argument with the specific type appeared in the list of template arguments,
-gfp will return its value. Also gfp does not ommit references and cv-qualifiers,
-so if the argument is an lvalue, gfp will return the reference.
+## How it is made
+
+The implementation of Uniprint includes the `gfp.hpp` header. GFP means Get From
+Pack, and it does what it says: it takes the pack of values and extracts the
+values with specific types from it.
+
+This is how it looks:
 
 ```cpp
-const int value = 10;
+class print {
+public:
+  template <typename... Types> void operator()(Types &&...args) {
+   // ...
+     auto sep = gfp::get_from_pack<args::sep>{}(std::forward<Types>(args)...);
 
-using t = decltype(gfp::get_from_pack<int>{}('a', "hello", value));
-
-assert((std::is_same<const int&, t>::value));
+     gfp::call_match(
+        sep,
+        [&print_args](args::sep a) { print_args.sep = a.get(); },
+        [](gfp::none_type) {}
+     );
+   // ...
+  }
+}
 ```
 
-In case if argument is not appeared, gfp will return an object of
-`gfp::none_type`. Gfp provides a way to easily handle this case:
-`gfp::call_match` template function, that takes a value and an arbitrary number
-of callable objects (for each possible type of a value) and tries to call each
-callable with this value.
+This code example is taken from the `uniprint.hpp` header. `gfp::get_from_pack`
+returns value of some (unknown) type, which is assigned to `sep`. Then the
+`gfp::call_match` is used to handle this value based on its type. If the type
+of `sep` is `args::sep`, then the separator's value is assigned to
+`print_args.sep`, otherwise (the type if `sep` is `gfp::none_type`) nothing
+happens. `call_match` calls the functor, which argument type matches the type of
+passed value.
 
-You can see the usage of `gfp::call_match` in `uniprint.hpp` header:
+This project is written just for fun, because I was wondering: "is it possible
+in C++?". The reason why it is written in C++11 is the same, because it was
+interesting to implement this without handy new tools like `constexpr if`
+and so on. It may be used in real-world projects, though I don't know, will it
+be a good idea.
 
-```cpp
-auto sep = gfp::get_from_pack<args::sep> {}(std::forward<Types>(args)...);
-
-gfp::call_match(
-  sep,
-  [&print_args](args::sep a) {
-    print_args.sep = a.get();
-  },
-  [](gfp::none_type) {});
-```
-
-Here `sep` can be of type either the `args::sep` or `gfp::none_type`, and there
-are a lambda for each type.
-
-The key concept of "Get From Pack" itself is a recursive iteration through
-the template parameter pack. It takes arbitrary arguments of some types,
-and checks, if the type of a current argument is the desired type. If so,
-it returns its value. Otherwise, it recursively finds the desired type in the
-tail of a pack.
+Licensed under MIT License.

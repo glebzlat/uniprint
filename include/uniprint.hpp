@@ -12,7 +12,12 @@ namespace uniprint {
 
 namespace args {
 
-template <typename T> class argument {
+/*
+ * Base class needed to detect argument classes with `is_argument`
+ */
+class argument_base {};
+
+template <typename T> class argument : argument_base {
 protected:
   T m_value;
 
@@ -30,30 +35,28 @@ public:
   operator const T() const { return m_value; }
 };
 
-class dummy_base {};
-
-class sep : public argument<char const *>, dummy_base {
+class sep : public argument<char const *> {
 public:
   using type = char const *;
 
   explicit sep(type value) : argument<type>(value) {}
 };
 
-class end : public argument<char const *>, dummy_base {
+class end : public argument<char const *> {
 public:
   using type = char const *;
 
   explicit end(type value) : argument<type>(value) {}
 };
 
-class file : public argument<std::ostream &>, dummy_base {
+class file : public argument<std::ostream &> {
 public:
   using type = std::ostream &;
 
   explicit file(type stream) : argument<type>(stream) {}
 };
 
-class flush : public argument<bool>, dummy_base {
+class flush : public argument<bool> {
 public:
   using type = bool;
 
@@ -69,7 +72,7 @@ using namespace gfp::details;
 template <class A>
 struct is_argument
     : std::integral_constant<bool,
-                             std::is_base_of<args::dummy_base, A>::value> {};
+                             std::is_base_of<args::argument_base, A>::value> {};
 
 template <typename T, bool Cond, T IfTrue, T IfFalse> struct conditional {
   using type = T;
@@ -85,9 +88,11 @@ struct conditional<T, false, IfTrue, IfFalse> {
 
 class print {
 private:
+  /*
+   * Private members wrapper. It is handy to pass single ref to a struct to
+   * nested calls rather than all the values one by one.
+   */
   struct m_print_args {
-    // little trick: store pointer to `std::ostream`, not reference. See
-    // `std::reference_wrapper`
     std::ostream *file = nullptr;
     char const *sep = " ";
     char const *end = "\n";
@@ -100,54 +105,72 @@ private:
 
   m_print_args m_args;
 
-  // SFINAE type-based if condition:
-  // if T is not an argument class, print the value
+  /*
+   * Sends `value` to `file` if T is not an argument class. Otherwise does
+   * nothing. It prevents the compilation error, because argument classes have
+   * no `operator<<`.
+   */
   template <typename T>
-  auto check_print(m_print_args &args, T &&value) -> typename std::enable_if<
-      !std::is_base_of<args::dummy_base, typename std::decay<T>::type>::value,
-      void>::type {
+  static auto check_print(m_print_args &args, T &&value) ->
+      typename std::enable_if<
+          !std::is_base_of<args::argument_base,
+                           typename std::decay<T>::type>::value,
+          void>::type {
     (*args.file) << value;
   }
 
-  // otherwise do nothing
   template <typename T>
-  auto check_print(m_print_args &, T &&) -> typename std::enable_if<
+  static auto check_print(m_print_args &, T &&) -> typename std::enable_if<
       details::is_argument<typename std::decay<T>::type>::value>::type {}
 
-  // inductive case 1: print separator on each even index
+  /*
+   * `print_impl` specializations used to alternate printing `sep` value and
+   * passed values. Pay attention to Index template variable. `print_impl` will
+   * print `sep` on even indexes (1) and print values on odd (2).
+   * (1)
+   */
   template <std::size_t Index, typename Head, typename... Rest>
-  auto print_impl(m_print_args &args, Head &&head, Rest &&...rest) ->
+  static auto print_impl(m_print_args &args, Head &&head, Rest &&...rest) ->
       typename std::enable_if<Index % 2 == 0>::type {
-    // if it is not a last type in a pack or it is not an argument class
     if (sizeof...(Rest) != 0 ||
-        !std::is_base_of<args::dummy_base,
-                         typename std::decay<Head>::type>::value)
+        !std::is_base_of<args::argument_base,
+                         typename std::decay<Head>::type>::value) {
+      /*
+       * If len(Rest) not 0 or not isinstance(Head, args::argument_mark)
+       * Do not print the separator if the current argument is the unprintable
+       * keyword argument and if the current argument is the last.
+       */
       (*args.file) << args.sep;
+    }
     print_impl<Index + 1>(args, std::forward<Head>(head),
                           std::forward<Rest>(rest)...);
   }
 
-  // inductive case 2: on odd index, print head and recursively
-  // print the rest
+  // (2)
   template <std::size_t Index, typename Head, typename... Rest>
-  auto print_impl(m_print_args &args, Head &&head, Rest &&...rest) ->
+  static auto print_impl(m_print_args &args, Head &&head, Rest &&...rest) ->
       typename std::enable_if<Index % 2 != 0, void>::type {
     check_print(args, std::forward<Head>(head));
     if (args.flush)
       (*args.file) << std::flush;
 
-    // check if the Head type is an argument type
-    // if so, next index will be equal to Index, otherwise Index + 1
+    /*
+     * Decide, increment index value or not.
+     * If isinstance(Head, args::argument_mark):
+     *   next index = current index
+     * else:
+     *   next index = current index + 1
+     */
     using head_t = typename std::decay<Head>::type;
-    constexpr bool is_base_arg = details::is_argument<head_t>::value;
+    constexpr bool is_arg = details::is_argument<head_t>::value;
     constexpr std::size_t next_idx =
-        details::conditional<std::size_t, is_base_arg, Index, Index + 1>::value;
+        details::conditional<std::size_t, is_arg, Index, Index + 1>::value;
 
     print_impl<next_idx>(args, std::forward<Rest>(rest)...);
   }
 
-  // base case: no values. Just print the end symbol
-  template <std::size_t Index> void print_impl(m_print_args &args) {
+  // Base case: no more arguments to print, so print the end.
+  template <std::size_t Index> static void print_impl(m_print_args &args) {
     (*args.file) << args.end;
     if (args.flush)
       (*args.file) << std::flush;
