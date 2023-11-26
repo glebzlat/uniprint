@@ -106,15 +106,14 @@ private:
   m_print_args m_args;
 
   /*
-   * Sends `value` to `file` if T is not an argument class. Otherwise does
+   * Sends `value` to `file` if not is_argument(T). Otherwise does
    * nothing. It prevents the compilation error, because argument classes have
    * no `operator<<`.
    */
   template <typename T>
   static auto check_print(m_print_args &args, T &&value) ->
       typename std::enable_if<
-          !std::is_base_of<args::argument_base,
-                           typename std::decay<T>::type>::value,
+          not details::is_argument<typename std::decay<T>::type>::value,
           void>::type {
     (*args.file) << value;
   }
@@ -133,10 +132,10 @@ private:
   static auto print_impl(m_print_args &args, Head &&head, Rest &&...rest) ->
       typename std::enable_if<Index % 2 == 0>::type {
     if (sizeof...(Rest) != 0 and
-        not std::is_base_of<args::argument_base,
-                            typename std::decay<Head>::type>::value) {
+        not details::is_argument<typename std::decay<Head>::type>::value) {
       /*
-       * If len(Rest) not 0 and not isinstance(Head, args::argument_base)
+       * If len(Rest) not 0 and not is_argument(Head):
+       *   print(sep)
        * Do not print the separator if the current argument is the unprintable
        * keyword argument and if the current argument is the last.
        */
