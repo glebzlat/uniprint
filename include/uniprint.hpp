@@ -132,11 +132,11 @@ private:
   template <std::size_t Index, typename Head, typename... Rest>
   static auto print_impl(m_print_args &args, Head &&head, Rest &&...rest) ->
       typename std::enable_if<Index % 2 == 0>::type {
-    if (sizeof...(Rest) != 0 ||
-        !std::is_base_of<args::argument_base,
-                         typename std::decay<Head>::type>::value) {
+    if (sizeof...(Rest) != 0 and
+        not std::is_base_of<args::argument_base,
+                            typename std::decay<Head>::type>::value) {
       /*
-       * If len(Rest) not 0 or not isinstance(Head, args::argument_mark)
+       * If len(Rest) not 0 and not isinstance(Head, args::argument_base)
        * Do not print the separator if the current argument is the unprintable
        * keyword argument and if the current argument is the last.
        */
