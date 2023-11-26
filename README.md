@@ -1,7 +1,7 @@
 # Uniprint
 
 C++ Python-like print function with keyword arguments. Main idea of this thing
-is the keyword arguments implementation in pure C++11.
+is keyword arguments implementation in pure C++11.
 
 To make things short, I'll give some code examples of Python's `print` function
 and compare it with Uniprint.
@@ -17,7 +17,7 @@ Hello, world!
 3
 >>> from sys import stderr
 >>> print("Message", file=stderr)
-
+Message
 ```
 
 C++ Uniprint:
@@ -29,6 +29,15 @@ using namespace uniprint::args;
 print("Hello", "world", sep{", "}, end{"!\n"});
 print(1, 2, 3, sep{"\n"});
 print(file{std::cerr}, "Message"); // yep, kwarg before positional
+```
+
+Output:
+```
+Hello, world!
+1
+2
+3
+Message
 ```
 
 So, does it look similar?
